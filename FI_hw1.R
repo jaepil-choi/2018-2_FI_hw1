@@ -48,7 +48,8 @@ View(SP500) # BHF, DXC, JEF, UA,... has missing values.
 SP500_noNA <-SP500[, !sapply(SP500, function(x) any(is.na(x)))]
 ncol(SP500_noNA) # => 492
 
-SP500_out <- data.frame(index(SP500_noNA), as.data.frame(SP500_noNA)) # export to csv (for Python implementation)
+# export to csv (for Python implementation)
+SP500_out <- data.frame(index(SP500_noNA), as.data.frame(SP500_noNA)) 
 colnames(SP500_out)[1] <- "date"
 write.csv(SP500_out, file='SP500_out_2015-2018.csv')
 
