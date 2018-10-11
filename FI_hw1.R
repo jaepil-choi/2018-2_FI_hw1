@@ -91,46 +91,77 @@ View(df) # Time series data of top 100 stocks. (2015-1-01-01 ~ 2018-10-10)
 #########################
 #### Strategy 1: Momentum
 
-balance = 100000 # Start investment with $100,000
-t = 180 # rebalancing every t months
+original_balance = 100000 # Start investment with $100,000
+balance <- 100000
+t = 124 # rebalancing every t days, 124 days equals 6 months working days.  
 
 # function to reshuffle given 100 stocks of past 365 days.
 # input: df chunk of 365 days
 # output: winner/loser firms (as global variables), reshuffled top 100 firms
 reshuffle <- function(d) { 
-  for (i in (1:ncol(d))){
-    temp_d <- yearlyReturn(d[,i])
-    colnames(temp_d) <- colnames(d[,i])
+  yearly_d <- NULL
+  for (firm in (1:ncol(d))){
+    temp_d <- yearlyReturn(d[,firm])
+    colnames(temp_d) <- colnames(d[,firm])
     yearly_d <- cbind(yearly_d, temp_d)
   }
   yearly_d <- as.data.frame(t(yearly_d))
+  yearly_d <- as.data.frame(t(yearly_d))
   top100_d <- yearly_d[order(-yearly_d[,1]),]
   
-  winners <<- attr(top100_d, 'row.names')
-  losers <<- attr(top100_d, 'row.names')
+  winners <<- colnames(top100_d[,(1:10)])
+  losers <<- colnames(top100_d[,(90:100)])
   
   return(top100_d)
 }
 
-for (i in (366:length(df))){
-  if (i==366) {
-    reshuffle(df[i-365:i])
-    df[i-365:i][,winners]
-    df[i-365:i][,losers]
+for (i in (252:length(df))){
+  if (i==252) { # return for the first year.  
+    weight_first <- rep(c(0.01, 0.01, 0.01) , times=c(10, 80, 10)) # The same weight for each firm on the first year. 
+    
+    temp_return <- Return.portfolio(df[(i-251):i], rebalance_on = 'years', weights=weight_first, geometric = FALSE)
+    yearly_return <- as.numeric(last(temp_return)) # Gets return rate of the first year's portfolio 
+    
+    balance <- balance * yearly_return
+    
+    current_top100_returns <- reshuffle(df[(i-251):i]) # Return of each stocks on the last day. (for the first year, it's Dec 31.)
+    current_rank <- colnames(current_top100_returns) # List of 100 companies sorted by rank. 
   }
   
-  if (i%%t == 0){
-    
+  if ((i>252) & (i%%t == 0)) {
+    tryCatch({
+      print(i)
+      weights <- rep(c(0.013, 0.01, 0.007) , times=c(10, 80, 10)) # weight is 30% heavier/lighter for 10 winner/loser firms.
+      
+      temp_return <- Return.portfolio(df[(i-(t-1)):i], rebalance_on = 'years', weights=weights, geometric = FALSE)
+      yearly_return <- as.numeric(last(temp_return)) # Gets return rate after t days.
+      
+      balance <- balance * yearly_return
+      
+      current_top100_returns <- reshuffle(df[(i-(t-1)):i]) # Return of each stocks on the last day. (for the first year, it's Dec 31.)
+      current_rank <- colnames(current_top100_returns) # List of 100 companies sorted by rank. 
+    }, error=function(e){cat("ERROR!:", conditionMessage(e), "\n")})
   } 
 }
+balance
 
+length(df)
+View(temp_return)
 
 ###################
 #### Strategy 2: Moving Average 
-test_d <- Return.portfolio((df[1:700]), rebalance_on = 'years', weights=NULL, geometric = TRUE) #---> test shows NaN
+
+weights <- rep(c(0.011, 0.01, 0.009) , times=c(10, 80, 10))
+weights <- rep(c(0.00, 0.01, 0.02) , times=c(20, 40, 40))
+weights
+
+
+
+test_d <- Return.portfolio(df, rebalance_on = 'years', weights=weights, geometric = FALSE)
 View(test_d)
 
 View(df['2015-06-11'])
+
 
 
 return_df <- Return.portfolio(df, rebalance_on = 'years', weights=NULL, geometric = FALSE) 
