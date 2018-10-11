@@ -22,9 +22,10 @@ library(rvest) #크롤링
 library(RCurl)
 library(PerformanceAnalytics)
 
-#####################################
-
 rm(list=ls()) #변수 초기화.
+
+####################
+#### 데이터 다운로드 
 
 ### S&P 500 기업 목록: Wikipedia 크롤링. 
 
@@ -36,7 +37,8 @@ fcodes <- unlist(c(wiki_table[[1]][1]), use.names=FALSE)
 fcodes
 length(fcodes) # => 505
 
-### S&P 500 기업 주가 데이터 받아오기. 
+######################################
+#### S&P 500 기업 주가 데이터 받아오기. 
 
 SP500 <- NULL
 start_date <- "2015-01-01"
@@ -52,6 +54,7 @@ View(SP500) # BHF, DXC, JEF, UA,... has missing values.
 ## drop columns with missing values.
 SP500_noNA <-SP500[, !sapply(SP500, function(x) any(is.na(x)))]
 ncol(SP500_noNA) # => 492
+View(SP500_noNA)
 save(SP500_noNA, file="SP500_noNA.RData")
 
 # export to csv (for Python implementation)
@@ -59,9 +62,11 @@ SP500_out <- data.frame(index(SP500_noNA), as.data.frame(SP500_noNA))
 colnames(SP500_out)[1] <- "date"
 write.csv(SP500_out, file='SP500_out_2015-2018.csv')
 
-### Strategy 2: Moving Average
+load("SP500_noNA.RData") # Note that if you save your data with save(), it cannot be restored under different name. The original object names are automatically used.
+View(SP500_noNA)
 
-## setting investment universe: Top 100 of S&P500
+######################################################
+#### Setting up investment universe: Top 100 of S&P500
 df <- SP500_noNA
 View(df)
 yearly_df <- NULL
@@ -74,15 +79,61 @@ for (i in (1:ncol(df))){
 }
 
 yearly_df <- as.data.frame(t(yearly_df))
-yearly_df <- head(yearly_df, n=100)
 View(yearly_df)
+top100 <- yearly_df[order(-yearly_df[,1]),]
+top100 <- head(top100, n=100)
+View(top100) # Top 100 stocks sorted by yearly return as of 2015-12-31
 
-universe <- attr(yearly_df, 'row.names') # Top 100 firms. 
+universe <- attr(top100, 'row.names')  
 df <- df[,universe] 
+View(df) # Time series data of top 100 stocks. (2015-1-01-01 ~ 2018-10-10)
 
-### moving average 
+#########################
+#### Strategy 1: Momentum
 
-return_df <- Return.portfolio(df, rebalance_on = 'years', weights=NULL, geometric = FALSE)
+balance = 100000 # Start investment with $100,000
+t = 180 # rebalancing every t months
+
+# function to reshuffle given 100 stocks of past 365 days.
+# input: df chunk of 365 days
+# output: winner/loser firms (as global variables), reshuffled top 100 firms
+reshuffle <- function(d) { 
+  for (i in (1:ncol(d))){
+    temp_d <- yearlyReturn(d[,i])
+    colnames(temp_d) <- colnames(d[,i])
+    yearly_d <- cbind(yearly_d, temp_d)
+  }
+  yearly_d <- as.data.frame(t(yearly_d))
+  top100_d <- yearly_d[order(-yearly_d[,1]),]
+  
+  winners <<- attr(top100_d, 'row.names')
+  losers <<- attr(top100_d, 'row.names')
+  
+  return(top100_d)
+}
+
+for (i in (366:length(df))){
+  if (i==366) {
+    reshuffle(df[i-365:i])
+    df[i-365:i][,winners]
+    df[i-365:i][,losers]
+  }
+  
+  if (i%%t == 0){
+    
+  } 
+}
+
+
+###################
+#### Strategy 2: Moving Average 
+test_d <- Return.portfolio((df[1:700]), rebalance_on = 'years', weights=NULL, geometric = TRUE) #---> test shows NaN
+View(test_d)
+
+View(df['2015-06-11'])
+
+
+return_df <- Return.portfolio(df, rebalance_on = 'years', weights=NULL, geometric = FALSE) 
 macd <- MACD(return_df, nFast=12, nSlow=26,nSig=9,maType=SMA, percent = FALSE)
 plot(macd)
 chartSeries(return_df, TA="addMACD()")
